@@ -1,0 +1,7 @@
+## Title: |cff8800QuickQuest|r
+## Description: Skip non-important dialog options (why would you want this though?)
+## Author: jwldnr
+## APIVersion: 100021
+## Version: 1.0
+
+QuickQuest.lua
