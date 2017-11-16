@@ -1,12 +1,20 @@
 local Addon = {}
 Addon.name = 'QuickQuest'
 
+local EVENT_MANAGER = EVENT_MANAGER
+local EVENT_ADD_ON_LOADED = EVENT_ADD_ON_LOADED
+local EVENT_PLAYER_ACTIVATED = EVENT_PLAYER_ACTIVATED
+local CHAT_SYSTEM = CHAT_SYSTEM
 local INTERACTION = INTERACTION
+local CHATTER_GOODBYE = CHATTER_GOODBYE
+
+local ZO_ColorDef = ZO_ColorDef
 
 function Addon:Initialize()
   self.interaction = INTERACTION
 
   self:RegisterForEvents()
+  self:HookResetInteraction()
   self:HookPopulateChatterOption()
 end
 
@@ -34,11 +42,11 @@ do
     Addon:OnPlayerActivated(...)
   end
 
-  local function Hook(control, funcName, hookFunc)
-    local fn = control[funcName]
+  local function SetHook(control, fnName, HookFn)
+    local fn = control[fnName]
     if ((fn ~= nil) and (type(fn) == 'function')) then
-      control[funcName] = function(...)
-        return hookFunc(fn, ...)
+      control[fnName] = function(...)
+        return HookFn(fn, ...)
       end
     end
   end
@@ -51,61 +59,37 @@ do
     EVENT_MANAGER:RegisterForEvent(self.name, EVENT_PLAYER_ACTIVATED, OnPlayerActivated)
   end
 
-  function Addon:HookPopulateChatterOption()
-    local function HookProcedure(fn, self, ...)
-      local controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions = ...
-
-      local text = controlID .. '. ' .. optionText
-
+  function Addon:HookResetInteraction()
+    local function HookFn(fn, self, ...)
       -- call original function
-      fn(self, controlID, optionIndex, text, optionType, optionalArg, isImportant, chosenBefore, importantOptions)
+      fn(self, ...)
 
-      --zo_callLater(function() chatterData.optionIndex() end, 2000)
-
-      --local t = optionIndex()
-      -- d(chatterData.optionIndex())
-      -- local control = self.optionControls[controlID]
-      -- d(control)
-      -- d(control.optionIndex)
-      -- if (control and control.optionIndex) then
-      --   if (control.optionIndex) then
-      --     local oiType = type(control.optionIndex)
-      --     if (oiType == 'number') then
-      --       d('numbeR!')
-      --     elseif (oiType == 'function') then
-      --       d('function!')
-      --       control.optionIndex()
-      --     end
-      --   end
-      -- end
-      -- local text = optionIndex() .. '. ' .. optionText
-      -- d(text)
-
-      -- override optionText (test)
-      -- optionText = function () return 'hooked' end
-
-      -- d(controlID)
-
-      -- call original function
-      -- fn(self, ...)
+      -- override title values
+      self.titleControl:SetText(GetUnitName('interact'))
+      self.titleControl:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+      self.titleControl:SetFont('ZoFontCallout')
     end
 
-    Hook(self.interaction, 'PopulateChatterOption', HookProcedure)
+    SetHook(self.interaction, 'ResetInteraction', HookFn)
+  end
 
-    -- local function HookFunc(fn, self, ...)
-    --   fn(self, ...)
-    --
-    --   local a, b, c = ...
-    --   d(a)
-    --   d(b)
-    --   d(c)
-    --
-    --   --local optionCount, backToTOCOption = ...
-    --
-    --   d('!')
-    -- end
-    --
-    -- Hook(INTERACTION, 'PopulateChatterOptions', HookFunc)
+  function Addon:HookPopulateChatterOption()
+    local function HookFn(fn, self, ...)
+      local controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions = ...
+
+      -- override option text
+      optionText = controlID .. '. ' .. optionText
+
+      -- override goodbye color
+      if (optionType == CHATTER_GOODBYE) then
+        chosenBefore = true
+      end
+
+      -- call original function with modified values
+      fn(self, controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions)
+    end
+
+    SetHook(self.interaction, 'PopulateChatterOption', HookFn)
   end
 end
 
