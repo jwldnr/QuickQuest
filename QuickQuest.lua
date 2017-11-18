@@ -4,11 +4,18 @@ Addon.name = 'QuickQuest'
 local EVENT_MANAGER = EVENT_MANAGER
 local EVENT_ADD_ON_LOADED = EVENT_ADD_ON_LOADED
 local EVENT_PLAYER_ACTIVATED = EVENT_PLAYER_ACTIVATED
-local CHAT_SYSTEM = CHAT_SYSTEM
 local INTERACTION = INTERACTION
+local CHAT_SYSTEM = CHAT_SYSTEM
 local CHATTER_GOODBYE = CHATTER_GOODBYE
+local CHATTER_START_SHOP = CHATTER_START_SHOP
 
+local SELECT_OPTION_DELAY = 250
+local TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT
+
+local zo_callLater = zo_callLater
 local ZO_ColorDef = ZO_ColorDef
+
+local type = type
 
 function Addon:Initialize()
   self.interaction = INTERACTION
@@ -40,11 +47,11 @@ function Addon:SelectChatterOption(optionIndex)
   if ('number' == optionIndexType) then
     zo_callLater(function()
       self.interaction:SelectChatterOptionByIndex(optionIndex)
-    end, 250)
+    end, SELECT_OPTION_DELAY)
   elseif ('function' == optionIndexType) then
     zo_callLater(function()
       optionIndex()
-    end, 250)
+    end, SELECT_OPTION_DELAY)
   end
 end
 
@@ -137,7 +144,6 @@ do
 
       -- dialog has important options
       if (hasImportantOptions) then
-        d('there are important options to choose from')
         return
       end
 
