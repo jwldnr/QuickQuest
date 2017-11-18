@@ -16,6 +16,7 @@ function Addon:Initialize()
   self:RegisterForEvents()
   self:HookResetInteraction()
   self:HookPopulateChatterOption()
+  self:HookFinalizeChatterOptions()
 end
 
 function Addon:OnAddOnLoaded(name)
@@ -33,6 +34,20 @@ function Addon:OnPlayerActivated()
   CHAT_SYSTEM:AddMessage(color:Colorize(self.name .. ' loaded'))
 end
 
+function Addon:SelectChatterOption(optionIndex)
+  local optionIndexType = type(optionIndex)
+
+  if ('number' == optionIndexType) then
+    zo_callLater(function()
+      self.interaction:SelectChatterOptionByIndex(optionIndex)
+    end, 250)
+  elseif ('function' == optionIndexType) then
+    zo_callLater(function()
+      optionIndex()
+    end, 250)
+  end
+end
+
 do
   local function OnAddOnLoaded(event, ...)
     Addon:OnAddOnLoaded(...)
@@ -42,9 +57,13 @@ do
     Addon:OnPlayerActivated(...)
   end
 
+  local function SelectChatterOption(...)
+    Addon:SelectChatterOption(...)
+  end
+
   local function SetHook(control, fnName, HookFn)
     local fn = control[fnName]
-    if ((fn ~= nil) and (type(fn) == 'function')) then
+    if (nil ~= fn and 'function' == type(fn)) then
       control[fnName] = function(...)
         return HookFn(fn, ...)
       end
@@ -81,7 +100,7 @@ do
       optionText = controlID .. '. ' .. optionText
 
       -- override goodbye color
-      if (optionType == CHATTER_GOODBYE) then
+      if (CHATTER_GOODBYE == optionType) then
         chosenBefore = true
       end
 
@@ -90,6 +109,76 @@ do
     end
 
     SetHook(self.interaction, 'PopulateChatterOption', HookFn)
+  end
+
+  function Addon:HookFinalizeChatterOptions()
+    local function HookFn(fn, self, ...)
+      -- call original function
+      fn(self, ...)
+
+      local optionCount = ...
+
+      -- select if there is only one option, should be safe right?
+      if (1 == optionCount) then
+        SelectChatterOption(optionCount)
+      end
+
+      -- check for important options
+      local hasImportantOptions = false
+
+      for i = 1, optionCount do
+        local optionControl = self.optionControls[i]
+
+        if (optionControl and optionControl.isImportant) then
+          hasImportantOptions = true
+          break
+        end
+      end
+
+      -- dialog has important options
+      if (hasImportantOptions) then
+        d('there are important options to choose from')
+        return
+      end
+
+      -- dialog has no important options
+      local numberChosenBefore = 0
+
+      for i = 1, optionCount do
+        local optionControl = self.optionControls[i]
+
+        -- guard: not a valid option
+        if (not optionControl or not optionControl.optionIndex) then
+          return
+        end
+
+        -- select if vendor
+        if (CHATTER_START_SHOP == optionControl.optionType) then
+          SelectChatterOption(optionControl.optionIndex)
+          break
+        end
+
+        -- select if option not chosen before
+        if (not optionControl.chosenBefore) then
+          SelectChatterOption(optionControl.optionIndex)
+          break
+        end
+
+        -- check if chosen before
+        if (optionControl.chosenBefore) then
+          numberChosenBefore = numberChosenBefore + 1
+
+          -- say goodbye if all options have been chosen before
+          if (optionCount == numberChosenBefore) then
+            SelectChatterOption(optionControl.optionIndex)
+            break
+          end
+        end
+      end
+
+    end
+
+    SetHook(self.interaction, 'FinalizeChatterOptions', HookFn)
   end
 end
 
