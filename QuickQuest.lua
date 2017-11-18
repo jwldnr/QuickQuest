@@ -144,6 +144,7 @@ do
 
       -- dialog has important options
       if (hasImportantOptions) then
+        d('there are important options to choose from')
         return
       end
 
