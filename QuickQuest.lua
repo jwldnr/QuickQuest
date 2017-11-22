@@ -23,19 +23,21 @@ local CHATTER_TALK_CHOICE_CLEMENCY_DISABLED = CHATTER_TALK_CHOICE_CLEMENCY_DISAB
 local CHATTER_GUILDKIOSK_IN_TRANSITION = CHATTER_GUILDKIOSK_IN_TRANSITION
 
 local DISABLED_OPTIONS = {
-  CHATTER_TALK_CHOICE_INTIMIDATE_DISABLED = true,
-  CHATTER_TALK_CHOICE_PERSUADE_DISABLED = true,
-  CHATTER_TALK_CHOICE_CLEMENCY_DISABLED = true,
-  CHATTER_GUILDKIOSK_IN_TRANSITION = true
+  CHATTER_TALK_CHOICE_INTIMIDATE_DISABLED,
+  CHATTER_TALK_CHOICE_PERSUADE_DISABLED,
+  CHATTER_TALK_CHOICE_CLEMENCY_DISABLED,
+  CHATTER_GUILDKIOSK_IN_TRANSITION
 }
 
 local CHATTER_TALK_CHOICE_MONEY = CHATTER_TALK_CHOICE_MONEY
 local CHATTER_TALK_CHOICE_PAY_BOUNTY = CHATTER_TALK_CHOICE_PAY_BOUNTY
 
 local COST_OPTIONS = {
-  [CHATTER_TALK_CHOICE_MONEY] = true,
-  [CHATTER_TALK_CHOICE_PAY_BOUNTY] = true
+  CHATTER_TALK_CHOICE_MONEY,
+  CHATTER_TALK_CHOICE_PAY_BOUNTY
 }
+
+local IsShiftKeyDown = IsShiftKeyDown
 
 function Addon:Initialize()
   self.interaction = INTERACTION
@@ -143,6 +145,10 @@ do
       -- call original function
       fn(self, ...)
 
+      if (IsShiftKeyDown()) then
+        return
+      end
+
       local optionCount = ...
       local debug = 0 -- test
 
@@ -177,7 +183,7 @@ do
         end
 
         -- option cost gold
-        if (COST_OPTIONS[optionControl.optionType]) then
+        if (nil ~= COST_OPTIONS[optionControl.optionType]) then
           debug = debug + 1
           d('option cost gold: ' .. debug)
 
@@ -211,7 +217,7 @@ do
         local optionControl = self.optionControls[i]
 
         -- skip invalid/not usable option
-        if (not optionControl or DISABLED_OPTIONS[optionControl.optionType]) then
+        if (not optionControl or nil ~= DISABLED_OPTIONS[optionControl.optionType]) then
           break
         end
 
