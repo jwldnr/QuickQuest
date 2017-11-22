@@ -17,6 +17,26 @@ local ZO_ColorDef = ZO_ColorDef
 
 local type = type
 
+local CHATTER_TALK_CHOICE_INTIMIDATE_DISABLED = CHATTER_TALK_CHOICE_INTIMIDATE_DISABLED
+local CHATTER_TALK_CHOICE_PERSUADE_DISABLED = CHATTER_TALK_CHOICE_PERSUADE_DISABLED
+local CHATTER_TALK_CHOICE_CLEMENCY_DISABLED = CHATTER_TALK_CHOICE_CLEMENCY_DISABLED
+local CHATTER_GUILDKIOSK_IN_TRANSITION = CHATTER_GUILDKIOSK_IN_TRANSITION
+
+local DISABLED_OPTIONS = {
+  CHATTER_TALK_CHOICE_INTIMIDATE_DISABLED = true,
+  CHATTER_TALK_CHOICE_PERSUADE_DISABLED = true,
+  CHATTER_TALK_CHOICE_CLEMENCY_DISABLED = true,
+  CHATTER_GUILDKIOSK_IN_TRANSITION = true
+}
+
+local CHATTER_TALK_CHOICE_MONEY = CHATTER_TALK_CHOICE_MONEY
+local CHATTER_TALK_CHOICE_PAY_BOUNTY = CHATTER_TALK_CHOICE_PAY_BOUNTY
+
+local COST_OPTIONS = {
+  [CHATTER_TALK_CHOICE_MONEY] = true,
+  [CHATTER_TALK_CHOICE_PAY_BOUNTY] = true
+}
+
 function Addon:Initialize()
   self.interaction = INTERACTION
 
@@ -86,7 +106,7 @@ do
   end
 
   function Addon:HookResetInteraction()
-    local function HookFn(fn, self, ...)
+    local function OnResetInteraction(fn, self, ...)
       -- call original function
       fn(self, ...)
 
@@ -96,11 +116,11 @@ do
       self.titleControl:SetFont('ZoFontCallout')
     end
 
-    SetHook(self.interaction, 'ResetInteraction', HookFn)
+    SetHook(self.interaction, 'ResetInteraction', OnResetInteraction)
   end
 
   function Addon:HookPopulateChatterOption()
-    local function HookFn(fn, self, ...)
+    local function OnPopulateChatterOption(fn, self, ...)
       local controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions = ...
 
       -- override option text
@@ -115,60 +135,93 @@ do
       fn(self, controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions)
     end
 
-    SetHook(self.interaction, 'PopulateChatterOption', HookFn)
+    SetHook(self.interaction, 'PopulateChatterOption', OnPopulateChatterOption)
   end
 
   function Addon:HookFinalizeChatterOptions()
-    local function HookFn(fn, self, ...)
+    local function OnFinalizeChatterOptions(fn, self, ...)
       -- call original function
       fn(self, ...)
 
       local optionCount = ...
+      local debug = 0 -- test
 
       -- select if there is only one option, should be safe right?
       if (1 == optionCount) then
-        SelectChatterOption(optionCount)
-      end
+        local optionControl = self.optionControls[optionCount]
 
-      -- check for important options
-      local hasImportantOptions = false
+        if (optionControl and optionControl.optionIndex) then
+          debug = debug + 1
+          d('only one option, select: ' .. debug)
 
-      for i = 1, optionCount do
-        local optionControl = self.optionControls[i]
-
-        if (optionControl and optionControl.isImportant) then
-          hasImportantOptions = true
-          break
+          SelectChatterOption(optionControl.optionIndex)
+          return
         end
       end
 
-      -- dialog has important options
-      if (hasImportantOptions) then
-        d('there are important options to choose from')
-        return
+      -- check for important options
+      for i = 1, optionCount do
+        local optionControl = self.optionControls[i]
+
+        -- skip invalid option
+        if (not optionControl) then
+          break
+        end
+
+        -- option is important
+        if (optionControl.isImportant) then
+          debug = debug + 1
+          d('option is important: ' .. debug)
+
+          return
+        end
+
+        -- option cost gold
+        if (COST_OPTIONS[optionControl.optionType]) then
+          debug = debug + 1
+          d('option cost gold: ' .. debug)
+
+          return
+        end
       end
 
-      -- dialog has no important options
+      -- check for start shop option
+      for i = 1, optionCount do
+        local optionControl = self.optionControls[i]
+
+        -- skip invalid option
+        if (not optionControl) then
+          d('not optionControl')
+          break
+        end
+
+        -- start shop available
+        if (CHATTER_START_SHOP == optionControl.optionType) then
+          debug = debug + 1
+          d('start shop available: ' .. debug)
+
+          SelectChatterOption(optionControl.optionIndex)
+          return
+        end
+      end
+
       local numberChosenBefore = 0
 
       for i = 1, optionCount do
         local optionControl = self.optionControls[i]
 
-        -- guard: not a valid option
-        if (not optionControl or not optionControl.optionIndex) then
-          return
-        end
-
-        -- select if vendor
-        if (CHATTER_START_SHOP == optionControl.optionType) then
-          SelectChatterOption(optionControl.optionIndex)
+        -- skip invalid/not usable option
+        if (not optionControl or DISABLED_OPTIONS[optionControl.optionType]) then
           break
         end
 
         -- select if option not chosen before
         if (not optionControl.chosenBefore) then
+          debug = debug + 1
+          d('select if option not chosen before: ' .. debug)
+
           SelectChatterOption(optionControl.optionIndex)
-          break
+          return
         end
 
         -- check if chosen before
@@ -177,15 +230,18 @@ do
 
           -- say goodbye if all options have been chosen before
           if (optionCount == numberChosenBefore) then
+            debug = debug + 1
+            d('say goodbye if all options have been chosen before: ' .. debug)
+
             SelectChatterOption(optionControl.optionIndex)
-            break
+            return
           end
         end
       end
 
     end
 
-    SetHook(self.interaction, 'FinalizeChatterOptions', HookFn)
+    SetHook(self.interaction, 'FinalizeChatterOptions', OnFinalizeChatterOptions)
   end
 end
 
