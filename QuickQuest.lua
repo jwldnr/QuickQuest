@@ -39,6 +39,8 @@ local COST_OPTIONS = {
 
 local IsShiftKeyDown = IsShiftKeyDown
 
+local ENABLE_DEBUG = true
+
 function Addon:Initialize()
   self.interaction = INTERACTION
 
@@ -49,7 +51,9 @@ function Addon:Initialize()
 end
 
 function Addon:OnAddOnLoaded(name)
-  if (name ~= self.name) then return end
+  if (name ~= self.name) then
+    return
+  end
 
   EVENT_MANAGER:UnregisterForEvent(self.name, EVENT_ADD_ON_LOADED)
 
@@ -61,6 +65,146 @@ function Addon:OnPlayerActivated()
 
   local color = ZO_ColorDef:New(1, .7, 1)
   CHAT_SYSTEM:AddMessage(color:Colorize(self.name .. ' loaded'))
+end
+
+function Addon:OnResetInteraction(fn, ...)
+  -- call original function
+  fn(...)
+
+  -- override title values
+  self.interaction.titleControl:SetText(GetUnitName('interact'))
+  self.interaction.titleControl:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+  self.interaction.titleControl:SetFont('ZoFontCallout')
+end
+
+function Addon:OnPopulateChatterOption(fn, ...)
+  local control, controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions = ...
+
+  -- override option text
+  optionText = controlID .. '. ' .. optionText
+
+  -- override goodbye color
+  if (CHATTER_GOODBYE == optionType) then
+    chosenBefore = true
+  end
+
+  -- call original function with modified values
+  fn(control, controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions)
+end
+
+function Addon:OnFinalizeChatterOptions(fn, ...)
+  -- call original function
+  fn(...)
+
+  if (IsShiftKeyDown()) then
+    self:WriteLineDebug('shift key is down', 0)
+
+    return
+  end
+
+  local control, optionCount = ...
+  local debugCount = 0
+
+  -- select if there is only one option, should be safe right?
+  if (1 == optionCount) then
+    local optionControl = control.optionControls[optionCount]
+
+    if (optionControl and optionControl.optionIndex) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('there is only one option', debugCount)
+      self:SelectChatterOption(optionControl.optionIndex)
+
+      return
+    end
+  end
+
+  -- check for important options
+  for i = 1, optionCount do
+    local optionControl = control.optionControls[i]
+
+    -- skip invalid option
+    if (not optionControl) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('[1] option is invalid', debugCount)
+
+      break
+    end
+
+    -- option is important
+    if (optionControl.isImportant) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('option is important', debugCount)
+
+      return
+    end
+
+    -- option cost gold
+    if (nil ~= COST_OPTIONS[optionControl.optionType]) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('option cost gold', debugCount)
+
+      return
+    end
+  end
+
+  -- check for start shop option
+  for i = 1, optionCount do
+    local optionControl = control.optionControls[i]
+
+    -- skip invalid option
+    if (not optionControl) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('[2] option is invalid', debugCount)
+
+      break
+    end
+
+    -- start shop available
+    if (CHATTER_START_SHOP == optionControl.optionType) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('start shop is available', debugCount)
+      self:SelectChatterOption(optionControl.optionIndex)
+
+      return
+    end
+  end
+
+  local chosenOptionCount = 0
+
+  for i = 1, optionCount do
+    local optionControl = control.optionControls[i]
+
+    -- skip invalid/not usable option
+    if (not optionControl or nil ~= DISABLED_OPTIONS[optionControl.optionType]) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('option is invalid/not usable', debugCount)
+
+      break
+    end
+
+    -- select if option not chosen before
+    if (not optionControl.chosenBefore) then
+      debugCount = debugCount + 1
+      self:WriteLineDebug('option has not been chosen before- select', debugCount)
+      self:SelectChatterOption(optionControl.optionIndex)
+
+      return
+    end
+
+    -- check if chosen before
+    if (optionControl.chosenBefore) then
+      chosenOptionCount = chosenOptionCount + 1
+
+      -- say goodbye if all options have been chosen before
+      if (optionCount == chosenOptionCount) then
+        debugCount = debugCount + 1
+        self:WriteLineDebug('all options have been chosen before- goodbye', debugCount)
+        self:SelectChatterOption(optionControl.optionIndex) -- goodbye
+
+        return
+      end
+    end
+  end
 end
 
 function Addon:SelectChatterOption(optionIndex)
@@ -77,6 +221,18 @@ function Addon:SelectChatterOption(optionIndex)
   end
 end
 
+function Addon:WriteLineDebug(message, count)
+  if (not ENABLE_DEBUG) then
+    return
+  end
+
+  if (1 < count) then
+    d('error! count should never be greater than 1')
+  end
+
+  d(message .. ', count: ' .. count)
+end
+
 do
   local function OnAddOnLoaded(event, ...)
     Addon:OnAddOnLoaded(...)
@@ -84,6 +240,18 @@ do
 
   local function OnPlayerActivated(event, ...)
     Addon:OnPlayerActivated(...)
+  end
+
+  local function OnResetInteraction(...)
+    Addon:OnResetInteraction(...)
+  end
+
+  local function OnPopulateChatterOption(...)
+    Addon:OnPopulateChatterOption(...)
+  end
+
+  local function OnFinalizeChatterOptions(...)
+    Addon:OnFinalizeChatterOptions(...)
   end
 
   local function SelectChatterOption(...)
@@ -108,145 +276,14 @@ do
   end
 
   function Addon:HookResetInteraction()
-    local function OnResetInteraction(fn, self, ...)
-      -- call original function
-      fn(self, ...)
-
-      -- override title values
-      self.titleControl:SetText(GetUnitName('interact'))
-      self.titleControl:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-      self.titleControl:SetFont('ZoFontCallout')
-    end
-
     SetHook(self.interaction, 'ResetInteraction', OnResetInteraction)
   end
 
   function Addon:HookPopulateChatterOption()
-    local function OnPopulateChatterOption(fn, self, ...)
-      local controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions = ...
-
-      -- override option text
-      optionText = controlID .. '. ' .. optionText
-
-      -- override goodbye color
-      if (CHATTER_GOODBYE == optionType) then
-        chosenBefore = true
-      end
-
-      -- call original function with modified values
-      fn(self, controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore, importantOptions)
-    end
-
     SetHook(self.interaction, 'PopulateChatterOption', OnPopulateChatterOption)
   end
 
   function Addon:HookFinalizeChatterOptions()
-    local function OnFinalizeChatterOptions(fn, self, ...)
-      -- call original function
-      fn(self, ...)
-
-      if (IsShiftKeyDown()) then
-        return
-      end
-
-      local optionCount = ...
-      local debug = 0 -- test
-
-      -- select if there is only one option, should be safe right?
-      if (1 == optionCount) then
-        local optionControl = self.optionControls[optionCount]
-
-        if (optionControl and optionControl.optionIndex) then
-          debug = debug + 1
-          d('only one option, select: ' .. debug)
-
-          SelectChatterOption(optionControl.optionIndex)
-          return
-        end
-      end
-
-      -- check for important options
-      for i = 1, optionCount do
-        local optionControl = self.optionControls[i]
-
-        -- skip invalid option
-        if (not optionControl) then
-          break
-        end
-
-        -- option is important
-        if (optionControl.isImportant) then
-          debug = debug + 1
-          d('option is important: ' .. debug)
-
-          return
-        end
-
-        -- option cost gold
-        if (nil ~= COST_OPTIONS[optionControl.optionType]) then
-          debug = debug + 1
-          d('option cost gold: ' .. debug)
-
-          return
-        end
-      end
-
-      -- check for start shop option
-      for i = 1, optionCount do
-        local optionControl = self.optionControls[i]
-
-        -- skip invalid option
-        if (not optionControl) then
-          d('not optionControl')
-          break
-        end
-
-        -- start shop available
-        if (CHATTER_START_SHOP == optionControl.optionType) then
-          debug = debug + 1
-          d('start shop available: ' .. debug)
-
-          SelectChatterOption(optionControl.optionIndex)
-          return
-        end
-      end
-
-      local numberChosenBefore = 0
-
-      for i = 1, optionCount do
-        local optionControl = self.optionControls[i]
-
-        -- skip invalid/not usable option
-        if (not optionControl or nil ~= DISABLED_OPTIONS[optionControl.optionType]) then
-          break
-        end
-
-        -- select if option not chosen before
-        if (not optionControl.chosenBefore) then
-          debug = debug + 1
-          d('select if option not chosen before: ' .. debug)
-
-          SelectChatterOption(optionControl.optionIndex)
-          return
-        end
-
-        -- check if chosen before
-        if (optionControl.chosenBefore) then
-          numberChosenBefore = numberChosenBefore + 1
-
-          -- say goodbye if all options have been chosen before
-          if (optionCount == numberChosenBefore) then
-            debug = debug + 1
-            d('say goodbye if all options have been chosen before: ' .. debug)
-
-            SelectChatterOption(optionControl.optionIndex)
-            return
-          end
-        end
-      end
-
-    end
-
     SetHook(self.interaction, 'FinalizeChatterOptions', OnFinalizeChatterOptions)
   end
 end
